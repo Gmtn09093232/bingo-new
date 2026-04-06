@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎲 BINGO · Pick your card 1–100</title>
+    <title>🎲 BINGO · Login & Play</title>
     <style>
         * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
         body {
@@ -13,16 +13,43 @@
             margin: 0;
             padding: 20px;
             min-height: 100vh;
-            text-align: center;
         }
         .container { max-width: 1300px; margin: 0 auto; }
-        .card-selection {
+        .auth-panel, .game-panel {
             background: #11212ecc;
             -webkit-backdrop-filter: blur(8px);
             backdrop-filter: blur(8px);
             border-radius: 48px;
-            padding: 20px;
+            padding: 25px;
             margin: 20px auto;
+        }
+        .balance-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0a1620;
+            border-radius: 60px;
+            padding: 8px 20px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #2c3e4e;
+            border: none;
+            color: white;
+            padding: 8px 18px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button.primary { background: #e67e22; }
+        button.danger { background: #7f2a2a; }
+        input, .name-input {
+            background: #1f2e3b;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 60px;
+            color: white;
+            margin: 5px;
         }
         .cards-grid {
             display: grid;
@@ -33,68 +60,22 @@
         }
         .card-btn {
             background: #1f2e3b;
-            border: none;
             padding: 8px;
             border-radius: 12px;
-            color: white;
-            font-weight: bold;
             cursor: pointer;
-            transition: 0.1s;
         }
-        .card-btn.taken {
-            background: #7f2a2a;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        .card-btn.selected {
-            background: #e67e22;
-            box-shadow: 0 0 8px gold;
-        }
-        .countdown {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #ffd966;
-            margin: 15px;
-        }
-        .game-header {
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            background: rgba(0,0,0,0.4);
-            border-radius: 60px;
-            padding: 12px 24px;
-            margin-bottom: 20px;
-        }
-        .called-number-big {
-            background: #000000aa;
-            font-size: 2.5rem;
-            padding: 5px 20px;
-            border-radius: 60px;
-            border-left: 6px solid gold;
-        }
-        .bingo-table {
-            margin: 15px auto;
-            border-collapse: collapse;
-            background: #1e2e3e;
-            border-radius: 20px;
-            overflow: hidden;
-        }
+        .card-btn.taken { background: #7f2a2a; opacity: 0.6; cursor: not-allowed; }
+        .card-btn.selected { background: #e67e22; box-shadow: 0 0 8px gold; }
+        .countdown { font-size: 2rem; color: #ffd966; }
+        .bingo-table { margin: auto; border-collapse: collapse; background: #1e2e3e; }
         .bingo-table td, .bingo-table th {
             width: 58px;
             height: 58px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 1.1rem;
             border: 1px solid #2f4b5c;
+            text-align: center;
             cursor: pointer;
-            transition: 0.1s;
         }
-        .bingo-table td:hover { background: #3a6b7e; }
-        .marked-cell {
-            background: #f4b942 !important;
-            color: #1f2a2e;
-            box-shadow: inset 0 0 0 2px gold;
-        }
+        .marked-cell { background: #f4b942 !important; color: #1f2a2e; }
         .free-cell { background: #5a7c5a; }
         .grid75 {
             display: grid;
@@ -107,78 +88,89 @@
             border-radius: 28px;
             padding: 8px;
         }
-        .cell {
-            background: #152b36;
-            border-radius: 12px;
-            padding: 8px 0;
-            font-weight: bold;
-        }
-        .cell.called { background: #27ae60; box-shadow: 0 0 6px #2ecc71; }
-        .winner-toast {
-            background: linear-gradient(135deg, #f1c40f, #e67e22);
-            color: #1e2a2e;
-            padding: 12px 20px;
-            border-radius: 60px;
-            font-size: 1.3rem;
-            width: fit-content;
-            margin: 15px auto;
-        }
+        .cell { background: #152b36; border-radius: 12px; padding: 8px 0; text-align: center; }
+        .cell.called { background: #27ae60; }
+        .winner-toast { background: linear-gradient(135deg, #f1c40f, #e67e22); color: #1e2a2e; padding: 12px 20px; border-radius: 60px; width: fit-content; margin: 15px auto; }
         .player-list { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 15px 0; }
         .player-tag { background: #14212b; padding: 4px 12px; border-radius: 40px; }
-        .name-input {
-            background: #1f2e3b;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 60px;
-            color: white;
-            font-size: 1rem;
-            margin: 10px;
-            width: 200px;
-        }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: #1e2e3e; padding: 30px; border-radius: 32px; min-width: 300px; text-align: center; }
         @media (max-width: 780px) {
-            .bingo-table td, .bingo-table th { width: 42px; height: 42px; font-size: 0.9rem; }
+            .bingo-table td, .bingo-table th { width: 42px; height: 42px; }
             .grid75 { grid-template-columns: repeat(15, 32px); }
-            .cards-grid { grid-template-columns: repeat(8, 1fr); }
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <!-- PAGE 1: CARD SELECTION BOARD (1–100) -->
-    <div id="page1" class="page card-selection">
-        <h2>🎯 Choose your Bingo Card (1–100)</h2>
-        <input type="text" id="playerName" class="name-input" placeholder="Your name" maxlength="16">
-        <div id="cardsGrid" class="cards-grid"></div>
-        <div id="lobbyStatus"></div>
-        <div id="countdownDisplay" class="countdown"></div>
-        <div id="playersListPage1" class="player-list"></div>
+    <!-- AUTH PANEL (Login/Register) -->
+    <div id="authPanel" class="auth-panel">
+        <h2>🔐 Login or Register</h2>
+        <input type="text" id="loginUsername" placeholder="Username">
+        <input type="password" id="loginPassword" placeholder="Password">
+        <button id="loginBtn" class="primary">Login</button>
+        <button id="registerBtn">Register</button>
+        <div id="authError" style="color: #ff9999; margin-top: 10px;"></div>
     </div>
 
-    <!-- PAGE 2: GAME BOARD -->
-    <div id="page2" style="display: none;">
-        <div class="game-header">
-            <h1>🎰 LIVE BINGO</h1>
-            <div class="called-number-big" id="lastCalled">🎲 --</div>
-        </div>
-        <div id="playersList" class="player-list"></div>
-        <div style="display: flex; flex-wrap: wrap; gap: 25px;">
-            <div style="flex:2; background:#0f1a24e0; border-radius:32px; padding:20px;">
-                <h2>📌 Your Card (click numbers to mark)</h2>
-                <div id="myCard"></div>
-                <div id="winnerMessage"></div>
-            </div>
-            <div style="flex:3; background:#0f1a24b0; border-radius:32px; padding:20px;">
-                <h3>🎯 Master Board (called numbers)</h3>
-                <div id="masterBoard" class="grid75"></div>
-                <p>✅ Numbers are called automatically every 4 seconds.<br>Click on a matching cell in your card to mark it.</p>
+    <!-- GAME PANEL (visible after login) -->
+    <div id="gamePanel" style="display: none;">
+        <div class="balance-bar">
+            <span>💰 Balance: <strong id="balanceAmount">0</strong> credits</span>
+            <div>
+                <button id="depositBtn" class="primary">💸 Deposit</button>
+                <button id="withdrawBtn">💳 Withdraw</button>
+                <button id="logoutBtn" class="danger">🚪 Logout</button>
             </div>
         </div>
+
+        <!-- Card Selection (Lobby) -->
+        <div id="lobbyArea">
+            <h2>🎯 Choose your Bingo Card (1–100)</h2>
+            <div id="cardsGrid" class="cards-grid"></div>
+            <div id="lobbyStatus"></div>
+            <div id="countdownDisplay" class="countdown"></div>
+            <div id="playersListPage1" class="player-list"></div>
+        </div>
+
+        <!-- Game Board (hidden until game starts) -->
+        <div id="gameArea" style="display: none;">
+            <div class="game-header" style="display: flex; justify-content: space-between;">
+                <h1>🎰 LIVE BINGO</h1>
+                <div class="called-number-big" id="lastCalled">🎲 --</div>
+            </div>
+            <div id="playersList" class="player-list"></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 25px;">
+                <div style="flex:2; background:#0f1a24e0; border-radius:32px; padding:20px;">
+                    <h2>📌 Your Card (click numbers to mark)</h2>
+                    <div id="myCard"></div>
+                    <div id="winnerMessage"></div>
+                </div>
+                <div style="flex:3; background:#0f1a24b0; border-radius:32px; padding:20px;">
+                    <h3>🎯 Master Board (called numbers)</h3>
+                    <div id="masterBoard" class="grid75"></div>
+                    <p>✅ Numbers called automatically every 4 sec. Click matching cell to mark.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Deposit/Withdraw Modal -->
+<div id="transactionModal" class="modal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Deposit Credits</h3>
+        <input type="number" id="txnAmount" placeholder="Amount in ETB">
+        <button id="txnConfirmBtn">Confirm</button>
+        <button id="txnCancelBtn">Cancel</button>
+        <div id="txnError"></div>
     </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
     let socket = null;
+    let currentUser = null;
     let myCardData = [];
     let markedCells = new Array(25).fill(false);
     let gameActive = false;
@@ -188,11 +180,12 @@
     let isLobbyOpen = true;
 
     // DOM elements
-    const page1 = document.getElementById('page1');
-    const page2 = document.getElementById('page2');
+    const authPanel = document.getElementById('authPanel');
+    const gamePanel = document.getElementById('gamePanel');
+    const balanceSpan = document.getElementById('balanceAmount');
     const cardsGrid = document.getElementById('cardsGrid');
-    const playerNameInput = document.getElementById('playerName');
-    const lobbyStatusDiv = document.getElementById('lobbyStatus');
+    const lobbyArea = document.getElementById('lobbyArea');
+    const gameArea = document.getElementById('gameArea');
     const countdownDisplay = document.getElementById('countdownDisplay');
     const playersListDiv = document.getElementById('playersList');
     const playersListPage1 = document.getElementById('playersListPage1');
@@ -200,8 +193,154 @@
     const winnerMsgDiv = document.getElementById('winnerMessage');
     const myCardDiv = document.getElementById('myCard');
     const masterBoardDiv = document.getElementById('masterBoard');
+    const authError = document.getElementById('authError');
 
-    // Render the 1–100 selection grid
+    // Helper functions
+    function showGamePanel() { gamePanel.style.display = 'block'; authPanel.style.display = 'none'; }
+    function showAuthPanel() { gamePanel.style.display = 'none'; authPanel.style.display = 'block'; }
+
+    async function apiCall(endpoint, method, body) {
+        const res = await fetch(endpoint, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        return res.json();
+    }
+
+    // Login / Register
+    document.getElementById('loginBtn').onclick = async () => {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!username || !password) { authError.innerText = 'Fill all fields'; return; }
+        const data = await apiCall('/api/login', 'POST', { username, password });
+        if (data.error) { authError.innerText = data.error; return; }
+        currentUser = { username: data.username };
+        balanceSpan.innerText = data.balance;
+        initSocket(data.username);
+        showGamePanel();
+    };
+    document.getElementById('registerBtn').onclick = async () => {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!username || !password) { authError.innerText = 'Fill all fields'; return; }
+        const data = await apiCall('/api/register', 'POST', { username, password });
+        if (data.error) { authError.innerText = data.error; return; }
+        currentUser = { username: data.username };
+        balanceSpan.innerText = data.balance;
+        initSocket(data.username);
+        showGamePanel();
+    };
+    document.getElementById('logoutBtn').onclick = async () => {
+        await apiCall('/api/logout', 'POST', {});
+        if (socket) socket.disconnect();
+        showAuthPanel();
+        currentUser = null;
+    };
+
+    // Deposit / Withdraw modal
+    const modal = document.getElementById('transactionModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const txnAmount = document.getElementById('txnAmount');
+    let currentTxnType = '';
+    document.getElementById('depositBtn').onclick = () => { currentTxnType = 'deposit'; modalTitle.innerText = 'Deposit Credits'; modal.style.display = 'flex'; };
+    document.getElementById('withdrawBtn').onclick = () => { currentTxnType = 'withdraw'; modalTitle.innerText = 'Withdraw Credits'; modal.style.display = 'flex'; };
+    document.getElementById('txnConfirmBtn').onclick = async () => {
+        const amount = parseFloat(txnAmount.value);
+        if (isNaN(amount) || amount <= 0) { document.getElementById('txnError').innerText = 'Invalid amount'; return; }
+        const endpoint = currentTxnType === 'deposit' ? '/api/deposit' : '/api/withdraw';
+        const data = await apiCall(endpoint, 'POST', { amount });
+        if (data.error) { document.getElementById('txnError').innerText = data.error; return; }
+        balanceSpan.innerText = data.newBalance;
+        modal.style.display = 'none';
+        txnAmount.value = '';
+        document.getElementById('txnError').innerText = '';
+        alert(`${currentTxnType} successful! New balance: ${data.newBalance} credits`);
+    };
+    document.getElementById('txnCancelBtn').onclick = () => { modal.style.display = 'none'; txnAmount.value = ''; };
+
+    // Socket initialization
+    function initSocket(username) {
+        if (socket) socket.disconnect();
+        socket = io({
+            auth: { sessionID: document.cookie } // simplified; real session handling via cookie
+        });
+        socket.on('connect', () => {
+            socket.emit('auth', { userId: currentUser.username, username });
+        });
+        socket.on('balanceUpdate', (balance) => { balanceSpan.innerText = balance; });
+        socket.on('availableCards', (avail) => {
+            availableCards = new Set(avail);
+            renderCardGrid();
+        });
+        socket.on('lobbyState', ({ isLobbyOpen: lobbyOpen, countdown, gameActive: active }) => {
+            isLobbyOpen = lobbyOpen;
+            if (lobbyOpen) {
+                lobbyArea.style.display = 'block';
+                gameArea.style.display = 'none';
+                if (countdown > 0) countdownDisplay.innerText = `Game starts in ${countdown}s`;
+                else countdownDisplay.innerText = "Waiting for players...";
+            } else {
+                lobbyArea.style.display = 'none';
+                gameArea.style.display = 'block';
+                buildMasterBoard();
+                resetMasterHighlights();
+            }
+        });
+        socket.on('countdownTick', (seconds) => {
+            if (seconds > 0) countdownDisplay.innerText = `Game starts in ${seconds}s`;
+            else countdownDisplay.innerText = "Starting!";
+        });
+        socket.on('lobbyReset', ({ countdown }) => {
+            lobbyArea.style.display = 'block';
+            gameArea.style.display = 'none';
+            gameActive = false;
+            myCardData = [];
+            markedCells = [];
+            mySelectedCard = null;
+            winnerMsgDiv.innerHTML = "";
+            countdownDisplay.innerText = `Game starts in ${countdown}s`;
+        });
+        socket.on('cardAssigned', (data) => {
+            myPlayerId = data.playerId;
+            myCardData = data.card;
+            markedCells = new Array(25).fill(false);
+            for (let i = 0; i < myCardData.length; i++) if (myCardData[i] === "FREE") markedCells[i] = true;
+            gameActive = data.gameActive;
+            renderMyCard();
+            if (!gameActive) resetMasterHighlights();
+        });
+        socket.on('gameStarted', () => {
+            gameActive = true;
+            lobbyArea.style.display = 'none';
+            gameArea.style.display = 'block';
+            resetMasterHighlights();
+            winnerMsgDiv.innerHTML = "";
+            lastCalledSpan.innerText = "🎲 --";
+        });
+        socket.on('newNumber', (number) => {
+            const letter = number <= 15 ? 'B' : number <= 30 ? 'I' : number <= 45 ? 'N' : number <= 60 ? 'G' : 'O';
+            lastCalledSpan.innerText = `${letter} - ${number}`;
+            highlightMasterNumber(number);
+        });
+        socket.on('markConfirmed', ({ cellIndex }) => {
+            markedCells[cellIndex] = true;
+            renderMyCard();
+        });
+        socket.on('gameWinner', (data) => {
+            gameActive = false;
+            const winnerText = (data.winnerId === myPlayerId) ? "🏆 YOU WON! CONGRATULATIONS! 🎉" : `🎊 ${data.winnerName} got BINGO! 🎊`;
+            winnerMsgDiv.innerHTML = `<div class="winner-toast">${winnerText}</div>`;
+        });
+        socket.on('playersList', (players) => {
+            const html = players.map(p => `<span class="player-tag">${escapeHtml(p.name)} (card ${p.cardNumber})</span>`).join('');
+            playersListDiv.innerHTML = html;
+            playersListPage1.innerHTML = html;
+        });
+        socket.on('joinError', (msg) => alert(msg));
+        socket.on('disconnect', () => alert("Disconnected from server."));
+    }
+
     function renderCardGrid() {
         cardsGrid.innerHTML = '';
         for (let i = 1; i <= 100; i++) {
@@ -215,22 +354,12 @@
             cardsGrid.appendChild(btn);
         }
     }
-
     function selectCard(cardNum) {
-        if (!isLobbyOpen) {
-            alert("Game already started, cannot change card.");
-            return;
-        }
-        if (!availableCards.has(cardNum) && mySelectedCard !== cardNum) {
-            alert(`Card ${cardNum} is already taken.`);
-            return;
-        }
-        let name = playerNameInput.value.trim();
-        if (name === "") name = "Guest_" + Math.floor(Math.random() * 1000);
+        if (!isLobbyOpen) { alert("Game already started, cannot change card."); return; }
+        if (!availableCards.has(cardNum) && mySelectedCard !== cardNum) { alert(`Card ${cardNum} is already taken.`); return; }
         mySelectedCard = cardNum;
-        socket.emit('selectCard', { name: name, cardNumber: cardNum });
+        socket.emit('selectCard', { name: currentUser.username, cardNumber: cardNum });
     }
-
     function renderMyCard() {
         if (!myCardData.length) return;
         let html = `<table class="bingo-table"><thead><tr>${['B','I','N','G','O'].map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>`;
@@ -241,18 +370,14 @@
                 let value = myCardData[idx];
                 let isMarked = markedCells[idx];
                 let cellClass = "";
-                if (value === "FREE") {
-                    cellClass = "free-cell";
-                    isMarked = true;
-                }
+                if (value === "FREE") { cellClass = "free-cell"; isMarked = true; }
                 if (isMarked && value !== "FREE") cellClass = "marked-cell";
-                html += `<td class="${cellClass}" data-cellidx="${idx}" data-value="${value}">${value === "FREE" ? "★" : value}</td>`;
+                html += `<td class="${cellClass}" data-cellidx="${idx}" data-value="${value}">${value === "FREE" ? "★" : value}</table>`;
             }
             html += `</tr>`;
         }
         html += `</tbody></table>`;
         myCardDiv.innerHTML = html;
-
         document.querySelectorAll('#myCard td').forEach(td => {
             td.addEventListener('click', (e) => {
                 const idx = parseInt(td.dataset.cellidx);
@@ -264,7 +389,6 @@
             });
         });
     }
-
     function buildMasterBoard() {
         masterBoardDiv.innerHTML = "";
         for (let i = 1; i <= 75; i++) {
@@ -275,142 +399,19 @@
             masterBoardDiv.appendChild(cell);
         }
     }
-
     function highlightMasterNumber(num) {
         const cell = document.getElementById(`master_${num}`);
         if (cell) cell.classList.add("called");
     }
-
     function resetMasterHighlights() {
         for (let i = 1; i <= 75; i++) {
             const cell = document.getElementById(`master_${i}`);
             if (cell) cell.classList.remove("called");
         }
     }
+    function escapeHtml(str) { return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
-    // Socket handlers
-    function connect() {
-        socket = io();
-
-        socket.on('availableCards', (avail) => {
-            availableCards = new Set(avail);
-            renderCardGrid();
-        });
-
-        socket.on('lobbyState', ({ isLobbyOpen: lobbyOpen, countdown, gameActive: active }) => {
-            isLobbyOpen = lobbyOpen;
-            if (lobbyOpen) {
-                page1.style.display = 'block';
-                page2.style.display = 'none';
-                if (countdown > 0) countdownDisplay.innerText = `Game starts in ${countdown}s`;
-                else countdownDisplay.innerText = "Waiting for players...";
-            } else {
-                page1.style.display = 'none';
-                page2.style.display = 'block';
-                buildMasterBoard();
-                resetMasterHighlights();
-            }
-        });
-
-        socket.on('countdownTick', (seconds) => {
-            if (seconds > 0) {
-                countdownDisplay.innerText = `Game starts in ${seconds}s`;
-                lobbyStatusDiv.innerText = `⏳ Selecting cards... ${seconds}s left`;
-            } else {
-                countdownDisplay.innerText = "Starting!";
-                lobbyStatusDiv.innerText = "Game is starting!";
-            }
-        });
-
-        socket.on('lobbyReset', ({ countdown }) => {
-            page1.style.display = 'block';
-            page2.style.display = 'none';
-            gameActive = false;
-            myCardData = [];
-            markedCells = [];
-            mySelectedCard = null;
-            winnerMsgDiv.innerHTML = "";
-            countdownDisplay.innerText = `Game starts in ${countdown}s`;
-            lobbyStatusDiv.innerText = "Choose your card!";
-        });
-
-        socket.on('cardAssigned', (data) => {
-            myPlayerId = data.playerId;
-            myCardData = data.card;
-            markedCells = new Array(25).fill(false);
-            for (let i = 0; i < myCardData.length; i++) {
-                if (myCardData[i] === "FREE") markedCells[i] = true;
-            }
-            gameActive = data.gameActive;
-            renderMyCard();
-            if (!gameActive) resetMasterHighlights();
-        });
-
-        socket.on('gameStarted', () => {
-            gameActive = true;
-            page1.style.display = 'none';
-            page2.style.display = 'block';
-            resetMasterHighlights();
-            winnerMsgDiv.innerHTML = "";
-            lastCalledSpan.innerText = "🎲 --";
-        });
-
-        socket.on('newNumber', (number) => {
-            const letter = number <= 15 ? 'B' : number <= 30 ? 'I' : number <= 45 ? 'N' : number <= 60 ? 'G' : 'O';
-            lastCalledSpan.innerText = `${letter} - ${number}`;
-            highlightMasterNumber(number);
-        });
-
-        socket.on('markConfirmed', ({ cellIndex }) => {
-            markedCells[cellIndex] = true;
-            renderMyCard();
-        });
-
-        socket.on('gameWinner', (data) => {
-            gameActive = false;
-            const winnerText = (data.winnerId === myPlayerId) ? "🏆 YOU WON! CONGRATULATIONS! 🎉" : `🎊 ${data.winnerName} got BINGO! 🎊`;
-            winnerMsgDiv.innerHTML = `<div class="winner-toast">${winnerText}</div>`;
-        });
-
-        socket.on('playersList', (players) => {
-            const html = players.map(p => `<span class="player-tag">${escapeHtml(p.name)} (card ${p.cardNumber})</span>`).join('');
-            playersListDiv.innerHTML = html;
-            playersListPage1.innerHTML = html;
-        });
-
-        socket.on('joinError', (msg) => alert(msg));
-        socket.on('disconnect', () => alert("Disconnected from server."));
-    }
-
-    function escapeHtml(str) {
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
-    // Start
-    connect();
-    playerNameInput.value = "Player_" + Math.floor(Math.random() * 900 + 100);
-    buildMasterBoard(); // initial empty board
-
-// join game after login
-socket.emit("join", localStorage.token);
-
-socket.on("joined", data => {
-    console.log("Balance:", data.balance);
-});
-
-socket.on("number", num => {
-    console.log("Number:", num);
-});
-
-socket.on("winner", w => {
-    alert(w.name + " wins $" + w.amount);
-});
-
+    buildMasterBoard(); // initial empty
 </script>
 </body>
 </html>

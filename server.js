@@ -1,21 +1,125 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const path = require('path');
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const fs = require('fs-extra');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-app.use(express.static('public'));
-const path = require('path');
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(session({
+    secret: 'bingo_super_secret_key_change_me',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 } // 1 day
+}));
 
-// Serve the main HTML file when someone visits "/"
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// Serve static files (optional)
+app.use(express.static('public'));
+
+// User data storage (JSON file)
+const USERS_FILE = './users.json';
+fs.ensureFileSync(USERS_FILE);
+let users = {};
+try {
+    users = fs.readJsonSync(USERS_FILE);
+} catch (e) { users = {}; }
+
+function saveUsers() {
+    fs.writeJsonSync(USERS_FILE, users, { spaces: 2 });
+}
+
+// Helper: get user by session
+function getLoggedInUser(req) {
+    if (!req.session.userId) return null;
+    return users[req.session.userId];
+}
+
+// ---------- AUTH ENDPOINTS ----------
+app.post('/api/register', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
+    if (users[username]) return res.status(400).json({ error: 'Username already exists' });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
+    users[username] = {
+        userId,
+        username,
+        password: hashedPassword,
+        balance: 100, // Starting bonus credits
+        createdAt: new Date().toISOString()
+    };
+    saveUsers();
+    req.session.userId = userId;
+    req.session.username = username;
+    res.json({ success: true, username, balance: users[username].balance });
 });
-// ---------- Game state ----------
-let players = {};           // socketId -> { name, card, marked, cardNumber, id }
-let takenCards = new Set(); // card numbers 1..100 that are already selected
+
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+    const user = users[username];
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    req.session.userId = user.userId;
+    req.session.username = username;
+    res.json({ success: true, username, balance: user.balance });
+});
+
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+app.get('/api/me', (req, res) => {
+    const user = getLoggedInUser(req);
+    if (!user) return res.status(401).json({ error: 'Not logged in' });
+    res.json({ username: user.username, balance: user.balance });
+});
+
+// ---------- BALANCE ENDPOINTS ----------
+app.post('/api/deposit', async (req, res) => {
+    const user = getLoggedInUser(req);
+    if (!user) return res.status(401).json({ error: 'Not logged in' });
+    const { amount, paymentMethod } = req.body;
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+    
+    // Here you would integrate Telebirr/Chapa payment gateway.
+    // For demo, we simulate success after "payment".
+    // In real implementation, you would create a payment session and wait for webhook.
+    
+    // Simulate immediate deposit (for testing)
+    user.balance += numAmount;
+    saveUsers();
+    res.json({ success: true, newBalance: user.balance });
+});
+
+app.post('/api/withdraw', async (req, res) => {
+    const user = getLoggedInUser(req);
+    if (!user) return res.status(401).json({ error: 'Not logged in' });
+    const { amount } = req.body;
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+    if (user.balance < numAmount) return res.status(400).json({ error: 'Insufficient balance' });
+    
+    // For withdrawal, you would integrate a payout API (Telebirr disbursement).
+    // Here we just deduct balance (simulate).
+    user.balance -= numAmount;
+    saveUsers();
+    res.json({ success: true, newBalance: user.balance });
+});
+
+// ---------- GAME STATE (from previous) ----------
+let players = {};           // socketId -> { name, card, marked, cardNumber, userId, username }
+let takenCards = new Set();
 let gameActive = false;
 let calledNumbers = [];
 let autoInterval = null;
@@ -23,9 +127,9 @@ let countdownTimeout = null;
 let countdownSeconds = 30;
 let isLobbyOpen = true;
 
+// Cost per game (in credits)
+const GAME_COST = 5;
 
-
-// Generate deterministic card from number 1..100
 function generateCardFromNumber(cardNum) {
     function seededRandom(seed) {
         let x = Math.sin(seed) * 10000;
@@ -51,16 +155,12 @@ function generateCardFromNumber(cardNum) {
     return card;
 }
 
-// Broadcast available cards (not taken)
 function broadcastAvailableCards() {
     const available = [];
-    for (let i = 1; i <= 100; i++) {
-        if (!takenCards.has(i)) available.push(i);
-    }
+    for (let i = 1; i <= 100; i++) if (!takenCards.has(i)) available.push(i);
     io.emit('availableCards', available);
 }
 
-// Full reset: back to lobby, clear everything
 function fullReset() {
     if (autoInterval) clearInterval(autoInterval);
     if (countdownTimeout) clearTimeout(countdownTimeout);
@@ -75,9 +175,8 @@ function fullReset() {
     io.emit('lobbyReset', { countdown: countdownSeconds });
 }
 
-// Start 30‑second countdown (only when first player selects a card)
 function startCountdown() {
-    if (countdownTimeout) clearTimeout(countdownTimeout);
+    if (countdownTimeout) clearInterval(countdownTimeout);
     countdownSeconds = 30;
     io.emit('countdownTick', countdownSeconds);
     countdownTimeout = setInterval(() => {
@@ -91,33 +190,56 @@ function startCountdown() {
     }, 1000);
 }
 
-// Begin the Bingo round: auto‑call numbers every 4 seconds
 function startGame() {
     if (gameActive) return;
+    // Deduct game cost from all participating users BEFORE game starts
+    const playersToRemove = [];
+    for (let id in players) {
+        const p = players[id];
+        const user = users[p.username];
+        if (!user || user.balance < GAME_COST) {
+            playersToRemove.push(id);
+            io.to(id).emit('error', `Insufficient balance (need ${GAME_COST} credits). Please deposit.`);
+        } else {
+            user.balance -= GAME_COST;
+            saveUsers();
+            io.to(id).emit('balanceUpdate', user.balance);
+        }
+    }
+    playersToRemove.forEach(id => {
+        const cardNum = players[id].cardNumber;
+        takenCards.delete(cardNum);
+        delete players[id];
+    });
+    broadcastAvailableCards();
+    
+    if (Object.keys(players).length === 0) {
+        io.emit('gameError', 'No players with enough balance. Game canceled.');
+        fullReset();
+        return;
+    }
+    
     gameActive = true;
     isLobbyOpen = false;
     calledNumbers = [];
     io.emit('gameStarted');
-
-    // Reset each player's marked cells (cards stay same)
+    
     for (let id in players) {
         const p = players[id];
         p.marked = new Array(25).fill(false);
-        p.marked[12] = true; // FREE always marked
+        p.marked[12] = true;
         io.to(id).emit('cardAssigned', {
             playerId: id,
             card: p.card,
             gameActive: true
         });
     }
-
+    
     if (autoInterval) clearInterval(autoInterval);
     autoInterval = setInterval(() => {
         if (!gameActive) return;
         let available = [];
-        for (let i = 1; i <= 75; i++) {
-            if (!calledNumbers.includes(i)) available.push(i);
-        }
+        for (let i = 1; i <= 75; i++) if (!calledNumbers.includes(i)) available.push(i);
         if (available.length === 0) {
             fullReset();
             return;
@@ -128,7 +250,6 @@ function startGame() {
     }, 4000);
 }
 
-// Win detection: rows, columns, diagonals, corners
 function checkWin(marked) {
     for (let r = 0; r < 5; r++) {
         let win = true;
@@ -149,64 +270,70 @@ function checkWin(marked) {
     const corners = [0, 4, 20, 24];
     let cornersWin = true;
     for (let idx of corners) if (!marked[idx]) { cornersWin = false; break; }
-    if (cornersWin) return true;
-    return false;
+    return cornersWin;
 }
 
-// Handle player marking a cell
 function handleMark(socketId, cellIndex, numberValue) {
     const player = players[socketId];
     if (!player || !gameActive) return false;
     if (!calledNumbers.includes(numberValue)) return false;
     if (player.card[cellIndex] !== numberValue) return false;
     if (player.marked[cellIndex]) return false;
-
     player.marked[cellIndex] = true;
     io.to(socketId).emit('markConfirmed', { cellIndex, number: numberValue });
-
     if (checkWin(player.marked)) {
         gameActive = false;
         if (autoInterval) clearInterval(autoInterval);
         autoInterval = null;
+        // Award winner with prize (e.g., 50 credits)
+        const winnerUser = users[player.username];
+        if (winnerUser) {
+            winnerUser.balance += 50;
+            saveUsers();
+            io.to(socketId).emit('balanceUpdate', winnerUser.balance);
+        }
         io.emit('gameWinner', { winnerId: socketId, winnerName: player.name });
-        setTimeout(() => {
-            fullReset();
-            // If any player remains, start countdown again? Actually fullReset clears players,
-            // so next join will trigger startCountdown. But we can restart countdown only if someone joins.
-        }, 5000);
+        setTimeout(() => fullReset(), 5000);
         return true;
     }
     return false;
 }
 
-// Socket events
+// Socket.io with authentication integration
+io.use((socket, next) => {
+    const sessionID = socket.handshake.auth.sessionID;
+    if (!sessionID) return next(new Error('No session'));
+    // We'll rely on client sending userId after login
+    next();
+});
+
 io.on('connection', (socket) => {
     console.log('Client connected', socket.id);
-
-    // Send current state
-    const available = [];
-    for (let i = 1; i <= 100; i++) if (!takenCards.has(i)) available.push(i);
-    socket.emit('availableCards', available);
-    socket.emit('lobbyState', { isLobbyOpen, countdown: countdownSeconds, gameActive });
-
+    
+    socket.on('auth', ({ userId, username }) => {
+        socket.userId = userId;
+        socket.username = username;
+        // Send current game state
+        const available = [];
+        for (let i = 1; i <= 100; i++) if (!takenCards.has(i)) available.push(i);
+        socket.emit('availableCards', available);
+        socket.emit('lobbyState', { isLobbyOpen, countdown: countdownSeconds, gameActive });
+        socket.emit('balanceUpdate', users[username]?.balance || 0);
+    });
+    
     socket.on('selectCard', ({ name, cardNumber }) => {
         if (!isLobbyOpen) {
-            socket.emit('joinError', 'Game already started, cannot select card now.');
+            socket.emit('joinError', 'Game already started');
             return;
         }
-        let num = parseInt(cardNumber);
-        if (isNaN(num) || num < 1 || num > 100) {
-            socket.emit('joinError', 'Invalid card number (1-100)');
-            return;
-        }
+        const num = parseInt(cardNumber);
+        if (isNaN(num) || num < 1 || num > 100) return;
         if (takenCards.has(num)) {
-            socket.emit('joinError', `Card ${num} is already taken.`);
+            socket.emit('joinError', `Card ${num} already taken`);
             return;
         }
-        // If player already had a card, free the old one
         if (players[socket.id]) {
-            const oldCard = players[socket.id].cardNumber;
-            takenCards.delete(oldCard);
+            takenCards.delete(players[socket.id].cardNumber);
         }
         takenCards.add(num);
         const card = generateCardFromNumber(num);
@@ -214,29 +341,25 @@ io.on('connection', (socket) => {
         marked[12] = true;
         players[socket.id] = {
             id: socket.id,
-            name: name || 'Guest',
+            name: name,
             cardNumber: num,
             card: card,
             marked: marked,
+            userId: socket.userId,
+            username: socket.username
         };
-        socket.emit('cardAssigned', {
-            playerId: socket.id,
-            card: card,
-            gameActive: false
-        });
+        socket.emit('cardAssigned', { playerId: socket.id, card, gameActive: false });
         broadcastAvailableCards();
         broadcastPlayers();
-
-        // Start countdown on first card selection
         if (Object.keys(players).length === 1 && isLobbyOpen && !countdownTimeout) {
             startCountdown();
         }
     });
-
+    
     socket.on('markNumber', ({ cellIndex, number }) => {
         handleMark(socket.id, cellIndex, number);
     });
-
+    
     socket.on('disconnect', () => {
         if (players[socket.id]) {
             const cardNum = players[socket.id].cardNumber;
