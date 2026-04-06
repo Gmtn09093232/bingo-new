@@ -23,6 +23,8 @@ let countdownTimeout = null;
 let countdownSeconds = 30;
 let isLobbyOpen = true;
 
+
+
 // Generate deterministic card from number 1..100
 function generateCardFromNumber(cardNum) {
     function seededRandom(seed) {

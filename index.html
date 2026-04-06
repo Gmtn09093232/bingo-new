@@ -395,6 +395,22 @@
     connect();
     playerNameInput.value = "Player_" + Math.floor(Math.random() * 900 + 100);
     buildMasterBoard(); // initial empty board
+
+// join game after login
+socket.emit("join", localStorage.token);
+
+socket.on("joined", data => {
+    console.log("Balance:", data.balance);
+});
+
+socket.on("number", num => {
+    console.log("Number:", num);
+});
+
+socket.on("winner", w => {
+    alert(w.name + " wins $" + w.amount);
+});
+
 </script>
 </body>
 </html>
