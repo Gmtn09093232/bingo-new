@@ -103,7 +103,7 @@
 </head>
 <body>
 <div class="container">
-    <!-- AUTH PANEL (Login/Register) -->
+    <!-- AUTH PANEL -->
     <div id="authPanel" class="auth-panel">
         <h2>🔐 Login or Register</h2>
         <input type="text" id="loginUsername" placeholder="Username">
@@ -124,7 +124,7 @@
             </div>
         </div>
 
-        <!-- Card Selection (Lobby) -->
+        <!-- Lobby Area -->
         <div id="lobbyArea">
             <h2>🎯 Choose your Bingo Card (1–100)</h2>
             <div id="cardsGrid" class="cards-grid"></div>
@@ -133,11 +133,11 @@
             <div id="playersListPage1" class="player-list"></div>
         </div>
 
-        <!-- Game Board (hidden until game starts) -->
+        <!-- Game Area (hidden until game starts) -->
         <div id="gameArea" style="display: none;">
-            <div class="game-header" style="display: flex; justify-content: space-between;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                 <h1>🎰 LIVE BINGO</h1>
-                <div class="called-number-big" id="lastCalled">🎲 --</div>
+                <div style="background:#000000aa; font-size:2rem; padding:5px 20px; border-radius:60px; border-left:6px solid gold;" id="lastCalled">🎲 --</div>
             </div>
             <div id="playersList" class="player-list"></div>
             <div style="display: flex; flex-wrap: wrap; gap: 25px;">
@@ -149,7 +149,7 @@
                 <div style="flex:3; background:#0f1a24b0; border-radius:32px; padding:20px;">
                     <h3>🎯 Master Board (called numbers)</h3>
                     <div id="masterBoard" class="grid75"></div>
-                    <p>✅ Numbers called automatically every 4 sec. Click matching cell to mark.</p>
+                    <p>✅ Numbers called every 4 sec. Click matching cell to mark.</p>
                 </div>
             </div>
         </div>
@@ -195,10 +195,6 @@
     const masterBoardDiv = document.getElementById('masterBoard');
     const authError = document.getElementById('authError');
 
-    // Helper functions
-    function showGamePanel() { gamePanel.style.display = 'block'; authPanel.style.display = 'none'; }
-    function showAuthPanel() { gamePanel.style.display = 'none'; authPanel.style.display = 'block'; }
-
     async function apiCall(endpoint, method, body) {
         const res = await fetch(endpoint, {
             method,
@@ -238,6 +234,9 @@
         currentUser = null;
     };
 
+    function showGamePanel() { gamePanel.style.display = 'block'; authPanel.style.display = 'none'; }
+    function showAuthPanel() { gamePanel.style.display = 'none'; authPanel.style.display = 'block'; }
+
     // Deposit / Withdraw modal
     const modal = document.getElementById('transactionModal');
     const modalTitle = document.getElementById('modalTitle');
@@ -262,11 +261,9 @@
     // Socket initialization
     function initSocket(username) {
         if (socket) socket.disconnect();
-        socket = io({
-            auth: { sessionID: document.cookie } // simplified; real session handling via cookie
-        });
+        socket = io();
         socket.on('connect', () => {
-            socket.emit('auth', { userId: currentUser.username, username });
+            socket.emit('auth', { userId: username, username });
         });
         socket.on('balanceUpdate', (balance) => { balanceSpan.innerText = balance; });
         socket.on('availableCards', (avail) => {
@@ -338,6 +335,7 @@
             playersListPage1.innerHTML = html;
         });
         socket.on('joinError', (msg) => alert(msg));
+        socket.on('error', (msg) => alert(msg));
         socket.on('disconnect', () => alert("Disconnected from server."));
     }
 
@@ -354,12 +352,14 @@
             cardsGrid.appendChild(btn);
         }
     }
+
     function selectCard(cardNum) {
         if (!isLobbyOpen) { alert("Game already started, cannot change card."); return; }
         if (!availableCards.has(cardNum) && mySelectedCard !== cardNum) { alert(`Card ${cardNum} is already taken.`); return; }
         mySelectedCard = cardNum;
         socket.emit('selectCard', { name: currentUser.username, cardNumber: cardNum });
     }
+
     function renderMyCard() {
         if (!myCardData.length) return;
         let html = `<table class="bingo-table"><thead><tr>${['B','I','N','G','O'].map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>`;
@@ -372,7 +372,7 @@
                 let cellClass = "";
                 if (value === "FREE") { cellClass = "free-cell"; isMarked = true; }
                 if (isMarked && value !== "FREE") cellClass = "marked-cell";
-                html += `<td class="${cellClass}" data-cellidx="${idx}" data-value="${value}">${value === "FREE" ? "★" : value}</table>`;
+                html += `<td class="${cellClass}" data-cellidx="${idx}" data-value="${value}">${value === "FREE" ? "★" : value}</td>`;
             }
             html += `</tr>`;
         }
@@ -389,6 +389,7 @@
             });
         });
     }
+
     function buildMasterBoard() {
         masterBoardDiv.innerHTML = "";
         for (let i = 1; i <= 75; i++) {
@@ -399,19 +400,22 @@
             masterBoardDiv.appendChild(cell);
         }
     }
+
     function highlightMasterNumber(num) {
         const cell = document.getElementById(`master_${num}`);
         if (cell) cell.classList.add("called");
     }
+
     function resetMasterHighlights() {
         for (let i = 1; i <= 75; i++) {
             const cell = document.getElementById(`master_${i}`);
             if (cell) cell.classList.remove("called");
         }
     }
+
     function escapeHtml(str) { return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
-    buildMasterBoard(); // initial empty
+    buildMasterBoard(); // initial empty board
 </script>
 </body>
 </html>
