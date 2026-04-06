@@ -7,7 +7,12 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 app.use(express.static('public'));
+const path = require('path');
 
+// Serve the main HTML file when someone visits "/"
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 // ---------- Game state ----------
 let players = {};           // socketId -> { name, card, marked, cardNumber, id }
 let takenCards = new Set(); // card numbers 1..100 that are already selected
@@ -255,5 +260,5 @@ function broadcastPlayers() {
     io.emit('playersList', playerList);
 }
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 1000;
 server.listen(PORT, () => console.log(`Bingo server running on port ${PORT}`));
