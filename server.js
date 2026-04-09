@@ -12,6 +12,8 @@ const server = http.createServer(app);
 const io = socketIo(server);
 const db = require("./db");
 
+
+
 // Create user
 app.post("/register", (req, res) => {
   const { username, balance } = req.body;
@@ -40,6 +42,8 @@ app.use(session({
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+
 
 // User data storage
 const USERS_FILE = './users.json';
@@ -386,5 +390,5 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 1000;
+const PORT = process.env.PORT || 3306;
 server.listen(PORT, () => console.log(`✅ Bingo server running on http://localhost:${PORT}`));
