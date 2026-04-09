@@ -10,6 +10,21 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
+const db = require("./db");
+
+// Create user
+app.post("/register", (req, res) => {
+  const { username, balance } = req.body;
+
+  db.query(
+    "INSERT INTO users (username, balance) VALUES (?, ?)",
+    [username, balance],
+    (err, result) => {
+      if (err) return res.status(500).send(err);
+      res.send("User created");
+    }
+  );
+});
 
 // Middleware
 app.use(express.json());
