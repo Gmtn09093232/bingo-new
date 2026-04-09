@@ -390,5 +390,5 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3306;
+const PORT = process.env.PORT || 13926;
 server.listen(PORT, () => console.log(`✅ Bingo server running on http://localhost:${PORT}`));
