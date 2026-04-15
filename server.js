@@ -137,9 +137,13 @@ let autoInterval = null;
 let countdownTimeout = null;
 let countdownSeconds = 30;
 let isLobbyOpen = true;
-const GAME_COST = 5;
-const WINNER_PRIZE = 50;
+const GAME_COST = 10;
+const HOUSE_PERCENT = 0.2; // 20% for you
 
+function calculatePrize() {
+    const playerCount = Object.keys(players).length;
+    return GAME_COST * playerCount * (1 - HOUSE_PERCENT);
+}
 function generateCardFromNumber(cardNum) {
     function seededRandom(seed) {
         let x = Math.sin(seed) * 10000;
@@ -304,13 +308,21 @@ function handleMark(socketId, cellIndex, numberValue) {
         if (autoInterval) clearInterval(autoInterval);
         autoInterval = null;
         // Award prize
-        const winnerUser = users[player.username];
-        if (winnerUser) {
-            winnerUser.balance += WINNER_PRIZE;
-            saveUsers();
-            io.to(socketId).emit('balanceUpdate', winnerUser.balance);
-        }
-        io.emit('gameWinner', { winnerId: socketId, winnerName: player.name });
+        const prize = calculatePrize();
+
+        winnerUser.balance += prize;
+        saveUsers();
+
+        io.to(socketId).emit('balanceUpdate', winnerUser.balance);
+const prize = calculatePrize();
+
+io.emit('gameWinner', {
+    winnerId: socketId,
+    winnerName: player.name,
+    prize: prize,
+    players: Object.keys(players).length
+});
+      
         setTimeout(() => fullReset(), 5000);
         return true;
     }
