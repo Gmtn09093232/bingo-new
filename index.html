@@ -325,10 +325,12 @@
             renderMyCard();
         });
         socket.on('gameWinner', (data) => {
-            gameActive = false;
-            const winnerText = (data.winnerId === myPlayerId) ? "🏆 YOU WON! CONGRATULATIONS! 🎉" : `🎊 ${data.winnerName} got BINGO! 🎊`;
-            winnerMsgDiv.innerHTML = `<div class="winner-toast">${winnerText}</div>`;
-        });
+    alert(
+        "🏆 " + data.winnerName + " wins!\n" +
+        "💰 Prize: " + data.prize + "\n" +
+        "👥 Players: " + data.players
+    );
+});
         socket.on('playersList', (players) => {
             const html = players.map(p => `<span class="player-tag">${escapeHtml(p.name)} (card ${p.cardNumber})</span>`).join('');
             playersListDiv.innerHTML = html;
@@ -338,7 +340,11 @@
         socket.on('error', (msg) => alert(msg));
         socket.on('disconnect', () => alert("Disconnected from server."));
     }
-
+socket.on('prizeUpdate', (data) => {
+    document.getElementById("prizeBox").innerText =
+        "Prize: " + data.prize + " (" + data.players + " players)";
+});
+    
     function renderCardGrid() {
         cardsGrid.innerHTML = '';
         for (let i = 1; i <= 100; i++) {
