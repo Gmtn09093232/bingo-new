@@ -322,7 +322,10 @@ io.emit('gameWinner', {
     prize: prize,
     players: Object.keys(players).length
 });
-      
+     io.emit('prizeUpdate', {
+    prize: calculatePrize(),
+    players: Object.keys(players).length
+}); 
         setTimeout(() => fullReset(), 5000);
         return true;
     }
